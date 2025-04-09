@@ -1,0 +1,7 @@
+pytest>=6.2.5
+black>=21.6b0
+isort>=5.9.2
+flake8>=3.9.2
+mypy>=0.910
+jupyter>=1.0.0
+notebook>=6.4.0 
