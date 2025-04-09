@@ -1,3 +1,4 @@
+"""Setup script for the sentisynth package."""
 from setuptools import setup, find_packages
 
 setup(
@@ -21,9 +22,9 @@ setup(
             "sentisynth=sentisynth.cli:main",
         ],
     },
-    author="Your Name",
-    author_email="your.email@example.com",
+    author="Param Kapur",
+    author_email="kpr.param@gmail.com",
     description="Synthetic data generation for sentiment analysis",
     keywords="nlp, sentiment-analysis, synthetic-data",
-    url="https://github.com/yourusername/sentisynth",
-) 
+    url="https://github.com/paramkpr/sentisynth",
+)
