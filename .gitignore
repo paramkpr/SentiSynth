@@ -28,7 +28,8 @@ venv312/
 venv311/
 # Jupyter Notebook
 .ipynb_checkpoints
-
+tmp/
+tmp*/
 # Distribution / packaging
 .Python
 env/
