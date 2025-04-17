@@ -29,6 +29,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Set OMP_NUM_THREADS to 1 to avoid potential CPU over-subscription
+os.environ['OMP_NUM_THREADS'] = '1'
+logger.info(f"Setting OMP_NUM_THREADS=1")
+
 
 def load_config(config_path: str) -> Dict:
     """Loads configuration from a YAML file."""
@@ -46,9 +50,11 @@ def load_datasets(dataset_path: str) -> DatasetDict:
     logger.info(f"Datasets loaded: {datasets}")
     # Ensure standard column names
     if "sentence" in datasets["train"].column_names:
-        datasets = datasets.rename_column("sentence", "text")
+        if "text" not in datasets["train"].column_names:
+            datasets = datasets.rename_column("sentence", "text")
     if "label" in datasets["train"].column_names:
-        datasets = datasets.rename_column("label", "labels")
+        if "labels" not in datasets["train"].column_names:
+            datasets = datasets.rename_column("label", "labels")
     # Make sure 'labels' column exists
     if "labels" not in datasets["train"].column_names:
         raise ValueError(
@@ -101,6 +107,7 @@ def main(config_path: str):
     # --- Setup W&B ---
     run_name = f"train_teacher_{int(time.time())}"
     if config.get("report_to") == "wandb":
+        os.environ.pop("WANDB_DISABLED", None)
         os.environ["WANDB_PROJECT"] = config["project_name"]
         logger.info(f"Logging to W&B project: {config['project_name']}")
     else:
@@ -114,7 +121,7 @@ def main(config_path: str):
     model = AutoModelForSequenceClassification.from_pretrained(
         config["model_name"], num_labels=2 # Assuming binary classification for SST-2
     )
-    tokenizer = AutoTokenizer.from_pretrained(config["model_name"], use_fast=False)
+    tokenizer = AutoTokenizer.from_pretrained(config["model_name"], use_fast=True)
 
     # --- Load and Prepare Data ---
     raw_datasets = load_datasets(config["dataset_path"])
@@ -126,7 +133,23 @@ def main(config_path: str):
     eval_dataset = tokenized_datasets[config["eval_split"]]
     sanity_dataset = tokenized_datasets[config["sanity_split"]]
 
+    ## TODO: UNCOMMENT FOR REAL RUN::
+    train_dataset = train_dataset.shuffle(seed=42).select(range(256))
+    eval_dataset = eval_dataset.shuffle(seed=42).select(range(128))
+    # sanity_dataset = sanity_dataset.shuffle(seed=42).select(range(256))
+
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+    # --- Detect device (CUDA, MPS, or CPU) ----------------------------
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
+
+    model.to(device)
+    logger.info(f"Using device: {device}")
 
     # --- Training Arguments ---
     logger.info("Setting up Training Arguments...")
@@ -144,8 +167,8 @@ def main(config_path: str):
         fp16=config["fp16"] and torch.cuda.is_available(),
         logging_dir=f"{config['output_dir']}/logs",
         logging_steps=config["logging_steps"],
-        evaluation_strategy=IntervalStrategy.STEPS,
         eval_steps=config["eval_steps"],
+        eval_strategy=IntervalStrategy.STEPS,
         save_strategy=IntervalStrategy.STEPS,
         save_steps=config["save_steps"],
         save_total_limit=2, # Saves the best and the latest checkpoints
@@ -156,6 +179,7 @@ def main(config_path: str):
         run_name=run_name,
         label_names=["labels"], # Specify label column name
         remove_unused_columns=False, # Keep all columns tokenized earlier
+        ddp_find_unused_parameters=False,
     )
     logger.info(f"FP16 enabled: {training_args.fp16}")
 
@@ -171,7 +195,7 @@ def main(config_path: str):
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        eval_dataset={"eval": eval_dataset, "sanity": sanity_dataset}, # Evaluate on both
+        eval_dataset=eval_dataset,
         tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics,
@@ -193,12 +217,7 @@ def main(config_path: str):
     trainer.log_metrics("train", metrics)
     trainer.save_metrics("train", metrics)
 
-    # Evaluate one last time on both sets with the best model
-    logger.info("Evaluating best model on eval and sanity sets...")
-    eval_metrics = trainer.evaluate(eval_dataset=eval_dataset, metric_key_prefix="final_eval")
-    trainer.log_metrics("final_eval", eval_metrics)
-    trainer.save_metrics("final_eval", eval_metrics)
-
+    # Evaluate on sanity set
     sanity_metrics = trainer.evaluate(eval_dataset=sanity_dataset, metric_key_prefix="final_sanity")
     trainer.log_metrics("final_sanity", sanity_metrics)
     trainer.save_metrics("final_sanity", sanity_metrics)

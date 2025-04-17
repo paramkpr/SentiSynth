@@ -24,7 +24,8 @@ wheels/
 venv/
 env/
 ENV/
-
+venv312/
+venv311/
 # Jupyter Notebook
 .ipynb_checkpoints
 
@@ -67,3 +68,6 @@ data/clean/*
 # Logs
 logs/
 *.log 
+
+wandb/
+outputs/
