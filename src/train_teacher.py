@@ -133,7 +133,7 @@ def main(config_path: str):
     eval_dataset = tokenized_datasets[config["eval_split"]]
     sanity_dataset = tokenized_datasets[config["sanity_split"]]
 
-    ## TODO: UNCOMMENT FOR REAL RUN::
+    ## TODO: COMMENT FOR REAL RUN::
     train_dataset = train_dataset.shuffle(seed=42).select(range(256))
     eval_dataset = eval_dataset.shuffle(seed=42).select(range(128))
     # sanity_dataset = sanity_dataset.shuffle(seed=42).select(range(256))

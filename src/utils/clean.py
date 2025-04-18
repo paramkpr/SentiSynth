@@ -43,8 +43,14 @@ def run_cleaning_and_split(raw_data_path="./data/raw", output_dd_path="./data/ss
     except Exception as e:
         print(f"Error during mapping/normalization: {e}")
         return
+    
+    # delete sentence column
+    ds_clean = ds_clean.remove_columns(["sentence"])
 
-    print("Splitting training data to create 'sent_sanity' (5% holdout)...")
+    # rename label column to labels, expected by Trainer
+    ds_clean = ds_clean.rename_column("label", "labels")
+
+    print("Splitting training data to create 'sanity' (5% holdout)...")
     try:
         train_full = ds_clean["train"]
         val = ds_clean["validation"] # Keep original validation split
@@ -53,15 +59,15 @@ def run_cleaning_and_split(raw_data_path="./data/raw", output_dd_path="./data/ss
         # Split the cleaned training data
         split_result = train_full.train_test_split(test_size=0.05, seed=42, shuffle=True)
         train = split_result['train']
-        sent_sanity = split_result['test']
+        sanity = split_result['test']
 
-        print(f"Final split sizes -> Train: {len(train)}, Val: {len(val)}, Sanity: {len(sent_sanity)}")
+        print(f"Final split sizes -> Train: {len(train)}, Val: {len(val)}, Sanity: {len(sanity)}")
 
         # Create the final DatasetDict
         final_dd = DatasetDict({
             "train": train,
             "val": val,
-            "sent_sanity": sent_sanity,
+            "sanity": sanity,
             "test": test
         })
         print("Final DatasetDict created:")
@@ -87,6 +93,6 @@ def run_cleaning_and_split(raw_data_path="./data/raw", output_dd_path="./data/ss
 if __name__ == "__main__":
     # Default paths if run directly
     default_raw_path = "./data/raw"
-    default_output_path = "./data/sst2_dd"
+    default_output_path = "./data/clean"
     run_cleaning_and_split(raw_data_path=default_raw_path, output_dd_path=default_output_path) 
     

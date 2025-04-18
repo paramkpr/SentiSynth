@@ -1,0 +1,50 @@
+model:
+  model_name: "microsoft/deberta-v3-base"
+  num_labels: 2
+  use_fast_tokenizer: true
+
+data:
+  dataset_path: "~/scratch/data/clean" # Use HF dataset identifier
+  max_len: 32
+  train_split: "train"
+  validation_split: "val"
+  test_split: "test"
+
+training:
+  output_dir: "runs/teacher/deberta_v3_base" # Specific output for this run
+  overwrite_output_dir: true
+  run_name: "teacher_sst2_deberta_v3_base_run" # Optional W&B/TensorBoard run name
+
+  # Reporting
+  report_to: "wandb" 
+  wandb_project: "senti_synth_teacher" 
+
+  # Batching & Epochs
+  per_device_train_batch_size: 16
+  per_device_eval_batch_size: 32
+  gradient_accumulation_steps: 1
+  num_train_epochs: 3
+
+  # Optimizer & Scheduler
+  learning_rate: 3e-5
+  warmup_ratio: 0.1
+
+  # Logging, Saving, Evaluation
+  logging_steps: 50
+  eval_steps: 200 # Evaluate every N steps
+  save_steps: 200 # Save checkpoint every N steps
+  save_total_limit: 2 # Keep only the best and the latest checkpoints
+  load_best_model_at_end: true # Load the best model found during training
+  metric_for_best_model: "eval_f1" # Metric to determine the 'best' model
+  greater_is_better: true
+
+  # Hardware & Performance
+  fp16: true # Set to false if GPU doesn't support FP16 or causes issues
+
+  # Callbacks
+  use_early_stopping: true
+  early_stopping_patience: 3
+  early_stopping_threshold: 0.001 # Small improvement needed to reset patience
+
+  # Optional: Evaluate on test set after training
+  do_test_eval: true
