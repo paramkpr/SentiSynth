@@ -48,10 +48,14 @@ To run on `weftdrive`:
    1. Check what packages are installed `conda list`
    2. Install the packages for the project `pip install -r requirements.txt`
    3. Install the project `pip install -e .`
-5. SCP `data/clean` to `weftdrive:~/scratch/data/clean`: `scp -r data/clean weftdrive:~/scratch/data/`
+5. SCP `data/clean` to `weftdrive:~/scratch/data/clean`: `scp -r data/clean paramkapur@weftdrive.private.reed.edu:~/scratch/paramkapur/data/clean`
    1. Ensure that the config file points to the correct path: `dataset_path: "~/scratch/data/clean"`
 6. Setup W&B: 
    1. `export WANDB_API_KEY="..."`
    2. `python -m wandb login`
-7. Run the training script: `nohup /srv/gpurun.pl python src/senti_synth/cli/01_train_teacher.py configs/teacher/stt2_hf.yaml > ~/scratch/senti_synth/logs/$(date +%Y%m%d_%H%M).log 2>&1 &`
+7. Create the logs directory and file: `mkdir -p ~/scratch/paramkapur/logs` and `touch ~/scratch/paramkapur/logs/$(date +%Y%m%d_%H%M).log`
+8. Run the training script: `nohup /srv/gpurun.pl python src/cli/01_train_teacher.py configs/teacher/stt2_hf.yaml > ~/scratch/paramkapur/logs/$(date +%Y%m%d_%H%M).log 2>&1 &`
+
+
+/scratch/paramkapur/data/clean/clean
 
