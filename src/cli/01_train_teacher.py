@@ -4,15 +4,13 @@ import yaml
 import logging
 from pathlib import Path
 
-import numpy as np
-from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 import torch
 from transformers import DataCollatorWithPadding, IntervalStrategy, TrainingArguments, Trainer
 
 from src.models import build_teacher
 from src.data import ClassificationDataModule
 from utils.wandb_setup import setup_wandb
-
+from utils.metrics import compute_metrics
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -20,18 +18,7 @@ logger = logging.getLogger(__name__)
 app = typer.Typer()
 
 
-def compute_metrics(p):
-    """Computes metrics for HF Trainer."""
-    preds = np.argmax(p.predictions, axis=1)
-    labels = p.label_ids
-    precision, recall, f1, _ = precision_recall_fscore_support(labels, preds, average='binary') # Assuming binary
-    acc = accuracy_score(labels, preds)
-    return {
-        'accuracy': acc,
-        'f1': f1,
-        'precision': precision,
-        'recall': recall
-    }
+
 
 
 @app.command()
