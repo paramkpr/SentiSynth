@@ -1,6 +1,8 @@
 import typer
+import os
 import yaml
 import logging
+from pathlib import Path
 
 import torch
 from transformers import DataCollatorWithPadding, IntervalStrategy, TrainingArguments, Trainer
@@ -20,7 +22,7 @@ app = typer.Typer()
 
 
 @app.command()
-def main(config_path):
+def main(config_path: Path = typer.Argument(..., help="Path to YAML config")):
     cfg = yaml.safe_load(config_path.read_text())
 
     # --- SETUP W&B ---
