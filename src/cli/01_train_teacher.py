@@ -9,8 +9,8 @@ from transformers import DataCollatorWithPadding, IntervalStrategy, TrainingArgu
 
 from src.models import build_teacher
 from src.data import ClassificationDataModule
-from utils.wandb_setup import setup_wandb
-from utils.metrics import compute_metrics
+from src.utils.wandb_setup import setup_wandb
+from src.utils.metrics import compute_metrics
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
