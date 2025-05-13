@@ -1,3 +1,15 @@
+model:
+  model_name: "microsoft/deberta-v3-base"
+  num_labels: 2
+  use_fast_tokenizer: true
+
+data:
+  dataset_path: "./data/clean/" # Use HF dataset identifier
+  max_len: 32
+  train_split: "train"
+  validation_split: "val"
+  test_split: "test"
+
 training:
   # ---------- bookkeeping ----------
   output_dir: "runs/teacher/deberta_v3_base"
@@ -11,7 +23,7 @@ training:
   per_device_train_batch_size: 64        # 4× bigger than before; fits easily in 80 GB
   per_device_eval_batch_size: 256        # evaluation is memory‑lighter, so push higher
   gradient_accumulation_steps: 1         # no need for micro‑batching on an H100
-  num_train_epochs: 6                    # SST‑2 is small; 4 epochs normally reaches peak F1
+  num_train_epochs: 4                    # SST‑2 is small; 4 epochs normally reaches peak F1
 
   # ---------- precision & speed ----------
   bf16: true              # H100 has native BF16; gives ~1.8× speed‑up over FP32  
@@ -41,3 +53,4 @@ training:
   early_stopping_threshold: 0.0005
 
   do_test_eval: true
+
