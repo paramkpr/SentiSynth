@@ -1,113 +1,134 @@
+# generator_finetune.py
+import math
+import logging
+from pathlib import Path
+
 import typer
 import yaml
-from pathlib import Path
-import logging
-
 import torch
-from transformers import DataCollatorForLanguageModeling, Trainer, TrainingArguments, IntervalStrategy
+from transformers import (
+    DataCollatorForLanguageModeling,
+    IntervalStrategy,
+    Trainer,
+    TrainingArguments,
+)
 
-from utils.wandb_setup import setup_wandb
-from utils.metrics import compute_metrics
-from models import build_generator
-from data import GeneratorDataModule
+from src.data import GeneratorDataModule
+from src.models import build_generator
+from src.utils.wandb_setup import setup_wandb
 
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(level=logging.INFO,
+                    format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 app = typer.Typer()
 
 
+def perplexity_metrics(eval_pred):
+    """
+    For causal‑LM fine‑tuning we usually care about perplexity rather than
+    accuracy/F1.  `Trainer.evaluate` returns (loss, logits, labels) so we grab
+    the loss and exponentiate it.
+    """
+    # Depending on HF version eval_pred can be EvalPrediction or a tuple
+    if isinstance(eval_pred, tuple):
+        loss = eval_pred[0]
+    else:
+        loss = eval_pred.loss
+    return {"perplexity": math.exp(loss)}
+
+
 @app.command()
-def main(config_path: Path = type.Argument(..., help="Path to YAML config")):
+def main(
+    config_path: Path = typer.Argument(..., help="Path to YAML config"),
+):
+    # ------------------------------------------------------------------ CONFIG
     cfg = yaml.safe_load(config_path.read_text())
 
-    # --- SETUP W&B ---
+    # ------------------------------ W&B (optional – falls back to “none”)
     run_name, report_to = setup_wandb(cfg)
 
-    # --- BUILD MODEL ---
-    model, tokenizer = build_generator(cfg['model'])
+    # ------------------------------------------------------- MODEL & TOKENISER
+    model, tokenizer = build_generator(cfg["model"])
 
-    # --- SETUP DATA ---
-    data_module = GeneratorDataModule(cfg['data'], tokenizer)
-    data_module.setup()
+    # -----------------------------------------------------------------  DATA
+    dm = GeneratorDataModule(cfg["data"], tokenizer)
+    dm.setup()
+    train_ds = dm.get_train_dataset()
+    eval_ds = dm.get_eval_dataset()
 
-    train_dataset = data_module.get_train_dataset()
-    eval_dataset = data_module.get_eval_dataset()
+    # ---------------------------------- DATALOADER COLLATOR (causal‑LM, no MLM)
+    data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
-    # --- SETUP TRAINER ---
-    data_collator = DataCollatorForLanguageModeling(
-        tokenizer=tokenizer,
-        mlm=False,
+    # ------------------------------------------------ TRAINING ARGUMENTS
+    training_args = TrainingArguments(
+        output_dir=cfg["training"]["output_dir"],
+        overwrite_output_dir=cfg["training"].get("overwrite_output_dir", True),
+        do_train=True,
+        do_eval=eval_ds is not None,
+        per_device_train_batch_size=cfg["training"].get("per_device_train_batch_size", 8),
+        per_device_eval_batch_size=cfg["training"].get("per_device_eval_batch_size", 16),
+        gradient_accumulation_steps=cfg["training"].get("gradient_accumulation_steps", 1),
+        num_train_epochs=cfg["training"].get("num_train_epochs", 3),
+        learning_rate=cfg["training"].get("learning_rate", 5e-5),
+        warmup_ratio=cfg["training"].get("warmup_ratio", 0.1),
+        fp16=cfg["training"].get("fp16", torch.cuda.is_available()),
+        logging_dir=cfg["training"].get("logging_dir", f"{cfg['training']['output_dir']}/logs"),
+        logging_steps=cfg["training"].get("logging_steps", 100),
+        eval_strategy=(
+            IntervalStrategy.STEPS if eval_ds is not None else IntervalStrategy.NO
+        ),
+        eval_steps=cfg["training"].get("eval_steps", 500),
+        save_strategy=IntervalStrategy.STEPS,
+        save_steps=cfg["training"].get("save_steps", 500),
+        save_total_limit=cfg["training"].get("save_total_limit", 2),
+        load_best_model_at_end=cfg["training"].get(
+            "load_best_model_at_end", eval_ds is not None
+        ),
+        metric_for_best_model=cfg["training"].get(
+            "metric_for_best_model", "eval_loss" if eval_ds else None
+        ),
+        greater_is_better=False,  # lower perplexity is better
+        report_to=[report_to] if report_to != "none" else [],
+        run_name=run_name,
+        remove_unused_columns=False,
+        ddp_find_unused_parameters=cfg["training"].get("ddp_find_unused_parameters", False),
     )
+    logger.info("Training args created (fp16=%s).", training_args.fp16)
 
-    training_args_dict = {
-        "output_dir": cfg['training']['output_dir'],
-        "overwrite_output_dir": cfg['training'].get("overwrite_output_dir", True),
-        "do_train": True,
-        "do_eval": eval_dataset is not None,
-        "per_device_train_batch_size": cfg['training'].get("per_device_train_batch_size", 8),
-        "per_device_eval_batch_size": cfg['training'].get("per_device_eval_batch_size", 16),
-        "gradient_accumulation_steps": cfg['training'].get("gradient_accumulation_steps", 1),
-        "num_train_epochs": cfg['training'].get("num_train_epochs", 3),
-        "learning_rate": cfg['training'].get("learning_rate", 5e-5),
-        "warmup_ratio": cfg['training'].get("warmup_ratio", 0.1),
-        "fp16": cfg['training'].get("fp16", torch.cuda.is_available()),
-        "logging_dir": cfg['training'].get("logging_dir", f"{cfg['training']['output_dir']}/logs"),
-        "logging_steps": cfg['training'].get("logging_steps", 100),
-        "eval_strategy": IntervalStrategy.STEPS if eval_dataset is not None else IntervalStrategy.NO,
-        "eval_steps": cfg['training'].get("eval_steps", 500),
-        "save_strategy": IntervalStrategy.STEPS,
-        "save_steps": cfg['training'].get("save_steps", 500),
-        "save_total_limit": cfg['training'].get("save_total_limit", 2),
-        "load_best_model_at_end": cfg['training'].get("load_best_model_at_end", eval_dataset is not None),
-        "metric_for_best_model": cfg['training'].get("metric_for_best_model", "eval_loss" if eval_dataset else None),
-        "greater_is_better": cfg['training'].get("greater_is_better", False),
-        "report_to": [report_to] if report_to != "none" else [],
-        "run_name": run_name,
-        "remove_unused_columns": False,
-        "ddp_find_unused_parameters": cfg['training'].get("ddp_find_unused_parameters", False),
-    }
-
-    training_args = TrainingArguments(**training_args_dict)
-    logger.info(f"Training arguments: {training_args}. FP16 Enabled: {training_args.fp16}")
-
+    # --------------------------------------------------------------- TRAINER
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
+        train_dataset=train_ds,
+        eval_dataset=eval_ds,
         tokenizer=tokenizer,
         data_collator=data_collator,
-        compute_metrics=compute_metrics if eval_dataset is not None else None,
+        compute_metrics=perplexity_metrics if eval_ds is not None else None,
     )
 
-    # --- TRAIN ---
-    logger.info("Training model...")
+    # ------------------------------------------------- TRAINING LOOP
+    logger.info("🚀  Starting training …")
     train_result = trainer.train()
-    logger.info(f"Training results: {train_result}")
+    logger.info("✅  Training finished")
 
-    # Save final model & metrics
-    logger.info(f"Saving best model to {training_args.output_dir}")
-    trainer.save_model() # Saves the best model due to load_best_model_at_end=True
+    # --------------------------- SAVE FINALISED CHECKPOINT & METRICS
+    trainer.save_model()          # saves best if load_best_model_at_end=True
     trainer.save_state()
 
-    # Log final metrics
-    metrics = train_result.metrics
-    trainer.log_metrics("train", metrics)
-    trainer.save_metrics("train", metrics)
+    trainer.log_metrics("train", train_result.metrics)
+    trainer.save_metrics("train", train_result.metrics)
 
-    # Evaluate on test set if available
-    test_dataset = data_module.get_sanity_dataset()
-    if test_dataset and cfg['training'].get("do_test_eval", True):
-        logger.info("Evaluating on test set...")
-        test_metrics = trainer.evaluate(eval_dataset=test_dataset, metric_key_prefix="test")
+    # ------------------------------------------ OPTIONAL TEST EVALUATION
+    test_ds = dm.get_sanity_dataset()
+    if test_ds and cfg["training"].get("do_test_eval", True):
+        logger.info("🧪  Running test evaluation …")
+        test_metrics = trainer.evaluate(test_ds, metric_key_prefix="test")
         trainer.log_metrics("test", test_metrics)
         trainer.save_metrics("test", test_metrics)
-        logger.info(f"Test set evaluation complete: {test_metrics}")
 
-
-    logger.info("Script finished successfully.")
+    logger.info("🎉  Script completed successfully.")
 
 
 if __name__ == "__main__":
