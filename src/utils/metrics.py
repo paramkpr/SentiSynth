@@ -1,4 +1,5 @@
-import numpy as np
+import numpy as np  
+import math
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
 
@@ -24,4 +25,34 @@ def compute_metrics(p):
         'false_positives': int(false_positives), 
         'true_negatives': int(true_negatives),
         'false_negatives': int(false_negatives)
+    }
+
+
+
+def perplexity_metrics(eval_pred):
+    """
+    Hugging Face passes (logits, labels) – no loss attribute.
+    We compute CE‑loss ourselves, then PPL = exp(loss).
+    Padding / ignored positions are ‑100 by HF convention.
+    """
+    # Unpack EvalPrediction → ndarray → torch.Tensor
+    logits, labels = eval_pred
+    logits  = torch.as_tensor(logits,  dtype=torch.float32)
+    labels  = torch.as_tensor(labels,  dtype=torch.long)
+
+    # Shift so that token t predicts t+1 (standard LM training)
+    shift_logits = logits[..., :-1, :].contiguous()
+    shift_labels = labels[..., 1:].contiguous()
+
+    # Cross‑entropy over non‑ignored tokens
+    loss = F.cross_entropy(
+        shift_logits.view(-1, shift_logits.size(-1)),
+        shift_labels.view(-1),
+        ignore_index = -100,     # HF Trainer uses -100 for padding
+        reduction    = "mean"
+    )
+
+    return {
+        "loss":       loss.item(),
+        "perplexity": math.exp(loss.item())
     }

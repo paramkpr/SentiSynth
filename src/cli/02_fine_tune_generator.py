@@ -16,7 +16,7 @@ from transformers import (
 from src.data import GeneratorDataModule
 from src.models import build_generator
 from src.utils.wandb_setup import setup_wandb
-
+from src.utils.metrics import perplexity_metrics
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s - %(levelname)s - %(message)s")
@@ -25,18 +25,6 @@ logger = logging.getLogger(__name__)
 app = typer.Typer()
 
 
-def perplexity_metrics(eval_pred):
-    """
-    For causal‑LM fine‑tuning we usually care about perplexity rather than
-    accuracy/F1.  `Trainer.evaluate` returns (loss, logits, labels) so we grab
-    the loss and exponentiate it.
-    """
-    # Depending on HF version eval_pred can be EvalPrediction or a tuple
-    if isinstance(eval_pred, tuple):
-        loss = eval_pred[0]
-    else:
-        loss = eval_pred.loss
-    return {"perplexity": math.exp(loss)}
 
 
 @app.command()
