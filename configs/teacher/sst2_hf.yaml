@@ -1,50 +1,43 @@
-model:
-  model_name: "microsoft/deberta-v3-base"
-  num_labels: 2
-  use_fast_tokenizer: true
-
-data:
-  dataset_path: "./data/clean/" # Use HF dataset identifier
-  max_len: 32
-  train_split: "train"
-  validation_split: "val"
-  test_split: "test"
-
 training:
-  output_dir: "runs/teacher/deberta_v3_base" # Specific output for this run
+  # ---------- bookkeeping ----------
+  output_dir: "runs/teacher/deberta_v3_base"
   overwrite_output_dir: true
-  run_name: "teacher_sst2_deberta_v3_base_run" # Optional W&B/TensorBoard run name
+  run_name: "teacher_sst2_deberta_v3_base_h100"
 
-  # Reporting
-  report_to: "wandb" 
-  wandb_project: "senti_synth_teacher" 
+  report_to: "wandb"
+  wandb_project: "senti_synth_teacher"
 
-  # Batching & Epochs
-  per_device_train_batch_size: 16
-  per_device_eval_batch_size: 32
-  gradient_accumulation_steps: 1
-  num_train_epochs: 3
+  # ---------- batch size & epochs ----------
+  per_device_train_batch_size: 64        # 4× bigger than before; fits easily in 80 GB
+  per_device_eval_batch_size: 256        # evaluation is memory‑lighter, so push higher
+  gradient_accumulation_steps: 1         # no need for micro‑batching on an H100
+  num_train_epochs: 6                    # SST‑2 is small; 4 epochs normally reaches peak F1
 
-  # Optimizer & Scheduler
-  learning_rate: 0.00003
-  warmup_ratio: 0.1
+  # ---------- precision & speed ----------
+  bf16: true              # H100 has native BF16; gives ~1.8× speed‑up over FP32  
+  fp16: false             # turn FP16 off to avoid two mixed‑precision modes
+  # If you prefer automatic selection, drop bf16/fp16 and add `torch_dtype: "auto"`
 
-  # Logging, Saving, Evaluation
-  logging_steps: 50
-  eval_steps: 200 # Evaluate every N steps
-  save_steps: 200 # Save checkpoint every N steps
-  save_total_limit: 2 # Keep only the best and the latest checkpoints
-  load_best_model_at_end: true # Load the best model found during training
-  metric_for_best_model: "eval_f1" # Metric to determine the 'best' model
+  # ---------- optimiser & scheduler ----------
+  learning_rate: 0.0001   # linear‑scale LR (16→64 batch ⇒ ×4 LR)
+  warmup_ratio: 0.05      # keep warm‑up tokens roughly constant after batch change
+
+  # ---------- misc performance knobs ----------
+  dataloader_num_workers: 8      # plenty of CPU headroom; hides data‑loading latency
+  gradient_checkpointing: false  # not needed; trade memory for speed
+  max_grad_norm: 1.0             # good default when using larger LR + BF16
+
+  # ---------- logging, saving, early stop ----------
+  logging_steps: 100
+  eval_steps: 500
+  save_steps: 500
+  save_total_limit: 3
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_f1"
   greater_is_better: true
 
-  # Hardware & Performance
-  fp16: true # Set to false if GPU doesn't support FP16 or causes issues
-
-  # Callbacks
   use_early_stopping: true
-  early_stopping_patience: 3
-  early_stopping_threshold: 0.001 # Small improvement needed to reset patience
+  early_stopping_patience: 2     # fewer epochs, so tighten patience
+  early_stopping_threshold: 0.0005
 
-  # Optional: Evaluate on test set after training
   do_test_eval: true

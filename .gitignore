@@ -82,3 +82,5 @@ outputs/
 .env/
 
 .DS_Store
+
+runs/

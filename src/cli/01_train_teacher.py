@@ -98,7 +98,8 @@ def main(config_path: Path = typer.Argument(..., help="Path to YAML config")):
     trainer.save_metrics("train", metrics)
 
     # Evaluate on test set if available
-    test_dataset = data_module.get_test_dataset()
+    # We use the sanity set as test set since the test set labels are all -1 
+    test_dataset = data_module.get_sanity_dataset()
     if test_dataset and cfg['training'].get("do_test_eval", True):
         logger.info("Evaluating on test set...")
         test_metrics = trainer.evaluate(eval_dataset=test_dataset, metric_key_prefix="test")
