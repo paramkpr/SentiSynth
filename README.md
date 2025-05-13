@@ -54,8 +54,10 @@ To run on `weftdrive`:
    1. `export WANDB_API_KEY="..."`
    2. `python -m wandb login`
 7. Create the logs directory and file: `mkdir -p ~/scratch/paramkapur/logs` and `touch ~/scratch/paramkapur/logs/$(date +%Y%m%d_%H%M).log`
-8. Run the training script: `nohup /srv/gpurun.pl python src/cli/01_train_teacher.py configs/teacher/stt2_hf.yaml > ~/scratch/paramkapur/logs/$(date +%Y%m%d_%H%M).log 2>&1 &`
+8. Run the training script: `nohup /srv/gpurun.pl python src/cli/01_train_teacher.py configs/teacher/sst2_hf.yaml > ~/scratch/paramkapur/logs/$(date +%Y%m%d_%H%M).log 2>&1 &`
 
 
 /scratch/paramkapur/data/clean/clean
 
+
+nohup /srv/gpurun.pl python src/cli/01_train_teacher.py configs/teacher/sst2_hf.yaml > ~/scratch/paramkapur/logs/$(date +%Y%m%d_%H%M).log 2>&1 &

@@ -4,7 +4,7 @@ model:
   use_fast_tokenizer: true
 
 data:
-  dataset_path: "~/scratch/paramkapur/data/clean/clean" # Use HF dataset identifier
+  dataset_path: "./data/clean/" # Use HF dataset identifier
   max_len: 32
   train_split: "train"
   validation_split: "val"

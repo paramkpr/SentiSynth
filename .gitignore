@@ -77,3 +77,8 @@ outputs/
 .DS_Store
 .DS_Store
 .DS_Store?
+
+.venv/
+.env/
+
+.DS_Store
