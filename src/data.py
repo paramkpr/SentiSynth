@@ -20,6 +20,10 @@ class ClassificationDataModule:
         self.required_splits = ["train", "val", "sanity", "test"]
         self.required_columns = ["text", "labels"]
 
+        self.label_column = cfg.get("label_column", "label")
+        self.pos_token    = cfg.get("pos_token", "<POS>")
+        self.neg_token    = cfg.get("neg_token", "<NEG>")
+
     def _load_clean_dataset(self) -> DatasetDict:
         logger.info(f"Loading dataset from: {self.dataset_path}")
         dataset = load_from_disk(self.dataset_path)
@@ -35,14 +39,31 @@ class ClassificationDataModule:
         return dataset
     
     def _tokenize_function(self, examples):
-        """Tokenization function for map."""
-        # Ensure correct text column is used
+        """
+        Add sentiment prefix, THEN run GPT‑tokeniser.
+        examples is a batch dict with keys like 'text' and 'label'.
+        """
+        texts = []
+        labels = examples.get(self.label_column, None)
+
+        # Build prefixed text list
+        if labels is not None:
+            # Supervised split (train/val/test)
+            for t, lab in zip(examples[self.text_column], labels):
+                prefix = self.pos_token if lab == 1 else self.neg_token
+                eos    = self.tokenizer.eos_token
+                texts.append(f"{prefix} {t} {eos}")
+        else:
+            # Unlabelled split (e.g. sanity set) – leave as‑is
+            texts = examples[self.text_column]
+
         return self.tokenizer(
-            examples["text"],
+            texts,
             truncation=True,
-            padding=False,  # Trainer handles padding with data collator
-            max_length=self.max_len
+            padding=False,
+            max_length=self.max_len,
         )
+
     
     def setup(self):
         """Loads and tokenizes the dataset."""

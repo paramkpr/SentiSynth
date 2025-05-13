@@ -2,6 +2,7 @@ model:
   model_name: "gpt2"          # you can swap in "gpt2-medium" or "EleutherAI/pythia-70m" etc.
   use_fast_tokenizer: true
   block_size: 128             # Maximum sequence length after tokenisation
+  unfrozen_layers: 4        # how many *top* transformer blocks stay trainable
 
 data:
   dataset_path: "./data/clean/" # Use HF dataset identifier
@@ -26,16 +27,16 @@ training:
   num_train_epochs: 3                    # SST‑2 is tiny; 2–3 epochs suffice
 
   # ── precision & speed ──────────────────────────────────────────────────────
-  fp16: true                             # enable mixed precision
-  bf16: false                            # turn off to avoid dual precision modes
+  fp16: false                             # enable mixed precision
+  bf16: true                            # turn off to avoid dual precision modes
   # torch_dtype: "auto"                 # (optional) lets HF pick fastest dtype
 
   # ── optimiser & scheduler ─────────────────────────────────────────────────
-  learning_rate: 0.00005                    # good starting LR for GPT‑2 on small corpora
+  learning_rate: 0.00003                    # good starting LR for GPT‑2 on small corpora
   warmup_ratio: 0.1
 
   # ── misc performance knobs ────────────────────────────────────────────────
-  dataloader_num_workers: 4
+  dataloader_num_workers: 8
   gradient_checkpointing: true           # big memory win on GPT‑style decoders
   max_grad_norm: 1.0
 

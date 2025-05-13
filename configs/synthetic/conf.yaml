@@ -1,0 +1,24 @@
+model:
+  # Generator checkpoint (fine‑tuned GPT‑2, etc.)
+  ckpt_dir: "runs/generator/gpt2_sst2/checkpoint-3500"
+
+teacher:
+  ckpt_dir: "runs/teacher/deberta_v3_base/"
+  min_confidence: 0.85   # accept sample only if score ≥ this value
+
+data:
+  output_dir: "data/synthetic_sst2"
+
+  # Target number of *accepted* samples (total across classes)
+  n_samples_total: 20000
+
+  # Fractions must sum to 1.0
+  split_ratio:
+    train: 0.9
+    val:   0.05
+    test:  0.05
+
+generation:
+  batch_size:        128        # try 128 if max_new_tokens stays at 64
+  temperature:       0.8       # a tad warmer improves diversity, less rejects
+  num_return_sequences: 2      # doubles raw throughput with the same kernels

@@ -40,6 +40,21 @@ def main(
     # ------------------------------------------------------- MODEL & TOKENISER
     model, tokenizer = build_generator(cfg["model"])
 
+    # ➡️ 1.  Add sentiment‑prefix tokens so the model always sees them first
+    special_tokens = {"additional_special_tokens": ["<POS>", "<NEG>"]}
+    tokenizer.add_special_tokens(special_tokens)
+    model.resize_token_embeddings(len(tokenizer))
+
+    def freeze_lower_layers(m, keep_last=4):
+        total = len(m.transformer.h)
+        cutoff = total - keep_last
+        for i, block in enumerate(m.transformer.h):
+            if i < cutoff:
+                for p in block.parameters():
+                    p.requires_grad = False
+
+    freeze_lower_layers(model, keep_last=cfg["model"].get("unfrozen_layers", 4))
+
     # -----------------------------------------------------------------  DATA
     dm = GeneratorDataModule(cfg["data"], tokenizer)
     dm.setup()
