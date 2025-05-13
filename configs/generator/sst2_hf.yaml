@@ -31,7 +31,7 @@ training:
   # torch_dtype: "auto"                 # (optional) lets HF pick fastest dtype
 
   # ── optimiser & scheduler ─────────────────────────────────────────────────
-  learning_rate: 5e-5                    # good starting LR for GPT‑2 on small corpora
+  learning_rate: 0.00005                    # good starting LR for GPT‑2 on small corpora
   warmup_ratio: 0.1
 
   # ── misc performance knobs ────────────────────────────────────────────────
