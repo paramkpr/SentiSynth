@@ -1,0 +1,55 @@
+model:
+  model_name: "prajjwal1/bert-tiny"      # or your own TinyBERT
+  num_labels: 2
+  use_fast_tokenizer: true
+
+data:
+  dataset_path: "data/real_1k"
+  max_len: 128
+
+training:
+  # ── bookkeeping ────────────────────────────────────────────────────────────
+  output_dir: "runs/student/real_1k"
+  overwrite_output_dir: true
+  run_name: "student_real_1k"
+
+  report_to: "wandb"
+  wandb_project: "senti_synth_student"
+
+  alpha:        0.5          # hard‑vs‑soft mix
+  temperature:  2.0
+
+  # ── batch size & epochs ────────────────────────────────────────────────────
+  per_device_train_batch_size: 16        # fits comfortably on 24 GB VRAM
+  per_device_eval_batch_size: 16
+  gradient_accumulation_steps: 1
+  num_train_epochs: 50                    # SST‑2 is tiny; 2–3 epochs suffice
+
+  # ── precision & speed ──────────────────────────────────────────────────────
+  fp16: false                             # enable mixed precision
+  bf16: true                            # turn off to avoid dual precision modes
+  # torch_dtype: "auto"                 # (optional) lets HF pick fastest dtype
+
+  # ── optimiser & scheduler ─────────────────────────────────────────────────
+  learning_rate: 0.00003                    # good starting LR for GPT‑2 on small corpora
+  warmup_ratio: 0.1
+
+  # ── misc performance knobs ────────────────────────────────────────────────
+  dataloader_num_workers: 8
+  gradient_checkpointing: true           # big memory win on GPT‑style decoders
+  max_grad_norm: 1.0
+
+  # ── logging, saving, early stop ───────────────────────────────────────────
+  logging_steps: 20
+  eval_steps: 100
+  save_steps: 100
+  save_total_limit: 3
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_f1"
+  greater_is_better: true
+
+  use_early_stopping: true
+  early_stopping_patience: 2
+  early_stopping_threshold: 0.0005
+
+  do_test_eval: true

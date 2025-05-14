@@ -14,7 +14,7 @@ training:
   # ---------- bookkeeping ----------
   output_dir: "runs/teacher/deberta_v3_base"
   overwrite_output_dir: true
-  run_name: "teacher_sst2_deberta_v3_base_h100"
+  run_name: "teacher_sst2_deberta_v3_base_lr_0.00005"
 
   report_to: "wandb"
   wandb_project: "senti_synth_teacher"
@@ -31,7 +31,7 @@ training:
   # If you prefer automatic selection, drop bf16/fp16 and add `torch_dtype: "auto"`
 
   # ---------- optimiser & scheduler ----------
-  learning_rate: 0.0001   # linear‑scale LR (16→64 batch ⇒ ×4 LR)
+  learning_rate: 0.00005  # linear‑scale LR (16→64 batch ⇒ ×4 LR)
   warmup_ratio: 0.05      # keep warm‑up tokens roughly constant after batch change
 
   # ---------- misc performance knobs ----------

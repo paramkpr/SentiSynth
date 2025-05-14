@@ -49,6 +49,7 @@ var/
 *.egg
 
 # Data and models
+data/
 data/raw/*
 data/processed/*
 data/models/*

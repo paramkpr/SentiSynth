@@ -42,6 +42,7 @@ generation:
 from __future__ import annotations
 
 import json
+import re
 import logging
 import math
 import random
@@ -50,6 +51,7 @@ from pathlib import Path
 from typing import Dict, List
 
 import torch
+import torch.nn.functional as F
 import typer
 import yaml
 from tqdm.auto import tqdm
@@ -60,6 +62,8 @@ from transformers import (
     pipeline,
 )
 
+from src.utils.prompts import POS_PROMPTS, NEG_PROMPTS, PROMPTS
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s — %(levelname)s — %(message)s",
@@ -68,7 +72,7 @@ logger = logging.getLogger(__name__)
 
 app = typer.Typer()
 
-PROMPTS = ["<POS> Review:", "<NEG> Review:"]
+
 
 
 def _set_seed(seed: int | None):
@@ -82,11 +86,20 @@ def _set_seed(seed: int | None):
 
 def _clean_output(generated: str) -> str:
     """Remove the sentiment prefix and tidy whitespace."""
+    _NON_ALPHA_RE  = re.compile(r"[^A-Za-z'\s]")
+    _STRAY_S_RE    = re.compile(r"(?<![A-Za-z])'s\b")   # 's not preceded by a letter
+    _MULTI_SPACE_RE = re.compile(r"\s+")
+
     try:
         cleaned = generated.split(":", 1)[1].strip()
     except IndexError:
         cleaned = generated.strip()
-    return " ".join(cleaned.split())
+    cleaned = " ".join(cleaned.split())
+
+    cleaned = _STRAY_S_RE.sub("", cleaned)         # 1. kill orphan 's
+    cleaned = _NON_ALPHA_RE.sub(" ", cleaned)      # 2. strip non‑alpha chars
+    cleaned = _MULTI_SPACE_RE.sub(" ", cleaned)    # 3. tidy spacing
+    return cleaned.strip()
 
 
 def _write_jsonl(items: List[Dict[str, str]], path: Path):
@@ -135,12 +148,6 @@ def main(cfg_path: Path = typer.Argument(..., help="Path to YAML config")):
     )
     model_gen = torch.compile(model_gen, mode="reduce-overhead", fullgraph=False)
 
-    # Pre‑encode <POS>/<NEG> once
-    prompt_ids = tokenizer_gen(
-        PROMPTS, add_special_tokens=False, return_tensors="pt"
-    ).input_ids.to(device)
-    
-
     # --------------------------------------- Teacher pipeline  (CPU)
     tok = AutoTokenizer.from_pretrained(teacher_ckpt)
     torch.set_num_threads(30)        # use all CPU cores
@@ -151,10 +158,12 @@ def main(cfg_path: Path = typer.Argument(..., help="Path to YAML config")):
         "text-classification",
         model=model,
         tokenizer=tok,
-        device=-1,            # ← run on CPU
-        batch_size=1024,
+        device=device,            
+        batch_size=128,
         truncation=True,
     )
+    beta        = cfg["teacher"].get("beta", 0.3)
+    temperature = cfg["teacher"].get("temperature", 2.0)
 
     # Generation params
     gen_params = {
@@ -174,65 +183,121 @@ def main(cfg_path: Path = typer.Argument(..., help="Path to YAML config")):
     rejects = 0
     pbar = tqdm(total=n_target, desc="Accepted samples")
 
-    # ── Async teacher consumer on CPU ───────────────────────────────
-    work_q: queue.Queue[list[str]] = queue.Queue(maxsize=4)
-    res_q:  queue.Queue[list[Dict]] = queue.Queue(maxsize=4)
+    # ── Async teacher (CPU) ─────────────────────────────────────────
+    work_q: queue.Queue[list[str]]           = queue.Queue(maxsize=30)
+    res_q:  queue.Queue[tuple[list[str],     # original cleaned texts
+                              list[list[Dict[str, float]]]]] = queue.Queue()
 
-    def _cpu_teacher():
+    def _cuda_teacher():
         while True:
             batch_txt = work_q.get()
             if batch_txt is None:
                 break
-            res_q.put(teacher_pipe(batch_txt))
+            # Single forward pass → list‑of‑lists (both labels)
+            scores = teacher_pipe(batch_txt, top_k=None)
+            res_q.put((batch_txt, scores))
             work_q.task_done()
 
-    t = threading.Thread(target=_cpu_teacher, daemon=True)
+    t = threading.Thread(target=_cuda_teacher, daemon=True)
     t.start()
 
-    while len(dataset) < n_target:
-        # 1️⃣  build input tensor (no re‑tokenisation)
-        rep = (batch_size + len(PROMPTS) - 1) // len(PROMPTS)
-        input_ids = prompt_ids.repeat_interleave(rep, 0)[:batch_size]
-        attention_mask = torch.ones_like(input_ids, dtype=torch.long)
+    target_pos = n_target // 2
+    target_neg = n_target - target_pos          # works for odd n_target, too
+    pos_needed, neg_needed = target_pos, target_neg
+
+    while pos_needed > 0 or neg_needed > 0:
+        # ───────────────────────────────────────────────────────── PROMPTS
+        # How many of each sentiment to put into *this* batch?
+        n_pos = min(batch_size // 2, pos_needed)
+        n_neg = min(batch_size - n_pos, neg_needed)
+
+        # Build prompt list & shuffle so the generator sees mixed order
+        prompts = (
+            random.choices(POS_PROMPTS, k=n_pos) +
+            random.choices(NEG_PROMPTS, k=n_neg)
+        )
+        random.shuffle(prompts)
+
+        # 1️⃣  tokenize prompts once (no repeat_interleave gymnastics)
+        enc = tokenizer_gen(
+            prompts,
+            return_tensors="pt",
+            padding=True,
+            padding_side="left",
+            truncation=False,
+            add_special_tokens=False,
+        ).to(device)
+
+        # 2️⃣  generate
         with torch.inference_mode():
             gen_ids = model_gen.generate(
-                input_ids=input_ids,
-                attention_mask=attention_mask,          # ← add this
+                **enc,
                 pad_token_id=tokenizer_gen.pad_token_id,
                 **gen_params,
             )
-        outputs = tokenizer_gen.batch_decode(gen_ids, skip_special_tokens=True)
 
-        texts = [_clean_output(t) for t in outputs]
-        texts = [t for t in texts if t]
-        # 2️⃣ hand off to CPU thread and immediately start next gen loop
-        work_q.put(texts)
+        batch_out = tokenizer_gen.batch_decode(gen_ids, skip_special_tokens=True)
 
-        # 3️⃣ drain any finished label batches
-        while not res_q.empty() and len(dataset) < n_target:
-            teacher_out = res_q.get()
-            for res, text in zip(teacher_out, texts):
-                conf = res["score"]
-                label = _label_from_teacher(res)
-                if label is not None and conf >= min_conf:
-                    dataset.append({"label": label, "text": text})
-                    pbar.update(1)
-                    if len(dataset) >= n_target:
-                        break
-                else:
+        # Hand the whole cleaned batch to the CPU worker
+        cleaned = [t for t in map(_clean_output, batch_out) if t]
+        if cleaned:
+            work_q.put(cleaned)
+
+        # ── Consume any finished teacher results ───────────────────
+        while not res_q.empty():
+            texts, scores_list = res_q.get()
+            for text, scores in zip(texts, scores_list):
+                # scores == [{'label':'LABEL_0','score':…}, {'label':'LABEL_1','score':…}]
+                prob_neg = next(d["score"] for d in scores if "LABEL_0" in d["label"].upper())
+                prob_pos = next(d["score"] for d in scores if "LABEL_1" in d["label"].upper())
+                conf, label = (prob_pos, 1) if prob_pos >= prob_neg else (prob_neg, 0)
+
+                if conf < min_conf:
                     rejects += 1
-                    logger.debug(
-                        "Rejected (conf=%.3f, label=%s): %.60s",
-                        conf,
-                        label,
-                        text,
-                    )
+                    continue
 
-    work_q.put(None)        # stop CPU thread
+                soft_scaled = F.softmax(
+                    torch.tensor([prob_neg, prob_pos]) / temperature, dim=-1
+                ).tolist()
+
+                sample = {
+                    "text":        text,
+                    "labels":      label,
+                    "soft_labels": soft_scaled,
+                    "weights":     beta,
+                    "is_synth":    1,
+                }
+
+                dataset.append(sample)
+                if label == 1:
+                    pos_needed -= 1
+                else:
+                    neg_needed -= 1
+                pbar.update(1)
+
+            res_q.task_done()
+
+        if len(dataset) >= n_target:
+            break
+        
+    pbar.close()
+
+    print("loop done")
+
+    work_q.put(None)        # signal worker to stop
     t.join()
 
+    print("thread joined")
+
+    # Flush anything still waiting
+    while not res_q.empty():
+        texts, scores_list = res_q.get()
+        res_q.task_done()
+
+    print("res_q flushed")
+
     logger.info(
-        "Finished generation: %d accepted, %d rejected (%.2f%% rejection)",
+        "\n\nFinished generation: %d accepted, %d rejected (%.2f%% rejection)",
         len(dataset),
         rejects,
         100 * rejects / (len(dataset) + rejects),
@@ -247,6 +312,17 @@ def main(cfg_path: Path = typer.Argument(..., help="Path to YAML config")):
         "val": dataset[n_train : n_train + n_val],
         "test": dataset[n_train + n_val :],
     }
+
+    # Print the first 10 samples of each split
+    for split_name, items in splits.items():
+        print(f"\n\n{'='*50}")
+        print(f"First 10 samples of {split_name}:")
+        print(f"{'='*50}\n")
+        print(f"{'#':<4} {'Text':<50} {'Label':<6} {'Soft Labels':<25} {'Weight':<8} {'Synth'}")
+        print(f"{'-'*4} {'-'*50} {'-'*6} {'-'*25} {'-'*8} {'-'*5}")
+        for i, item in enumerate(items[:10]):
+            print(f"{i+1:<4} {item['text'][:50]:<50} {item['labels']:<6} {str(item['soft_labels']):<25} {item['weights']:<8.2f} {item['is_synth']}")
+        print(f"\n{'='*50}\n")
 
     # --------------------------------------- Write files
     out_dir = Path(cfg["data"]["output_dir"]).expanduser()
