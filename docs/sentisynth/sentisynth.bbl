@@ -1,0 +1,63 @@
+\begin{thebibliography}{10}
+
+\bibitem{blitzer2007domain}
+John Blitzer, Mark Dredze, and Fernando Pereira.
+\newblock Biographies, bollywood, boom-boxes and blenders: Domain adaptation for sentiment classification.
+\newblock In {\em Proceedings of the 45th Annual Meeting of the Association for Computational Linguistics}, pages 440--447, Prague, Czech Republic, 2007. Association for Computational Linguistics.
+
+\bibitem{hinton2015kd}
+Geoffrey~E. Hinton, Oriol Vinyals, and Jeffrey Dean.
+\newblock Distilling the knowledge in a neural network.
+\newblock {\em arXiv preprint arXiv:1503.02531}, 2015.
+
+\bibitem{CITATION_NEEDED}
+Kapur.
+\newblock Pending.
+\newblock 2002.
+
+\bibitem{kim2014cnn}
+Yoon Kim.
+\newblock Convolutional neural networks for sentence classification.
+\newblock In {\em Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing}. Association for Computational Linguistics, 2014.
+
+\bibitem{pang2002thumbs}
+Bo~Pang, Lillian Lee, and Shivakumar Vaithyanathan.
+\newblock Thumbs up? sentiment classification using machine learning techniques.
+\newblock In {\em Proceedings of the 2002 Conference on Empirical Methods in Natural Language Processing}. Association for Computational Linguistics, 2002.
+
+\bibitem{riloff2013sarcasm}
+Ellen Riloff, Ashequl Qadir, Prafulla Surve, Lalindra~De Silva, Nathan Gilbert, and Ruihong Huang.
+\newblock Sarcasm as contrast between a positive sentiment and negative situation.
+\newblock In {\em Proceedings of the 2013 Conference on Empirical Methods in Natural Language Processing}. Association for Computational Linguistics, 2013.
+
+\bibitem{sanh2019distilbert}
+Victor Sanh, Lysandre Debut, Julien Chaumond, and Thomas Wolf.
+\newblock Distilbert, a distilled version of bert: Smaller, faster, cheaper and lighter.
+\newblock {\em arXiv preprint arXiv:1910.01108}, 2019.
+
+\bibitem{sennrich2016backtrans}
+Rico Sennrich, Barry Haddow, and Alexandra Birch.
+\newblock Improving neural machine translation models with monolingual data.
+\newblock In {\em Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics}. Association for Computational Linguistics, 2016.
+
+\bibitem{socher2013sst}
+Richard Socher, Alex Perelygin, Jean Wu, Jason Chuang, Christopher~D. Manning, Andrew Ng, and Christopher Potts.
+\newblock Recursive deep models for semantic compositionality over a sentiment treebank.
+\newblock In {\em Proceedings of the 2013 Conference on Empirical Methods in Natural Language Processing}. Association for Computational Linguistics, 2013.
+
+\bibitem{wei2019eda}
+Jason Wei and Kai Zou.
+\newblock Eda: Easy data augmentation techniques for boosting performance on text classification tasks.
+\newblock In {\em Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing}. Association for Computational Linguistics, 2019.
+
+\bibitem{xie2020noisystudent}
+Qizhe Xie, Minh-Thang Luong, Eduard Hovy, and Quoc~V. Le.
+\newblock Self-training with noisy student improves imagenet classification.
+\newblock In {\em Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition}, Seattle, USA, 2020.
+
+\bibitem{zhang2017textgan}
+Yizhe Zhang, Zhe Gan, and Lawrence Carin.
+\newblock Generating text via adversarial training.
+\newblock In {\em Proceedings of the {NIPS} Workshop on Adversarial Training}, Barcelona, Spain, 2016.
+
+\end{thebibliography}
